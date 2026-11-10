@@ -20,6 +20,9 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 속성은 다른 display 규칙보다 항상 우선 */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: 'Pretendard', 'Malgun Gothic', system-ui, sans-serif;
@@ -360,4 +363,55 @@ tbody tr:hover { background: #fcfaf7; }
   .notice-list a { grid-template-columns: 1fr; }
   .notice-list .badge { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
   .inline-form { flex-direction: column; }
+}
+
+/* ── 관리자: 작성된 글 목록 ───────────────── */
+button.small { padding: 7px 14px; font-size: 13px; }
+button.danger {
+  background: var(--surface);
+  color: var(--accent-dark);
+  border: 1px solid #f3c4b8;
+  box-shadow: none;
+}
+button.danger:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+.form-actions { display: flex; gap: 8px; }
+.card.editing { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(29, 27, 25, .08), var(--shadow); }
+.segmented input:disabled + span { cursor: not-allowed; opacity: .55; }
+
+.admin-list { list-style: none; padding: 0; margin: 4px 0 0; }
+.admin-list > li { border-top: 1px solid var(--line); }
+.admin-list > li:first-child { border-top: none; }
+.admin-list .empty { border: 2px dashed var(--line); margin-top: 12px; }
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+}
+.row-info { display: flex; flex-direction: column; min-width: 0; }
+.row-title {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-title:hover { text-decoration: underline; }
+.actions { display: flex; gap: 6px; flex-shrink: 0; }
+.applicants {
+  margin: 0 0 14px;
+  padding: 4px 14px 8px;
+  background: #fcfaf7;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.applicants table { margin-top: 4px; }
+.applicants .notice-meta { margin: 10px 0 6px; }
+
+@media (max-width: 520px) {
+  .row { flex-direction: column; align-items: stretch; }
+  .actions button { flex: 1; }
 }
