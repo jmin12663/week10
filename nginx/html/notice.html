@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>공지 상세</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">학과 공지</a>
+    <a href="admin.html" class="nav-link">관리자</a>
+  </header>
+
+  <main>
+    <a href="index.html" class="back">← 목록으로</a>
+
+    <article id="notice" class="card"></article>
+
+    <section id="apply-section" class="card" hidden>
+      <h2>선착순 신청</h2>
+      <form id="apply-form">
+        <label>학번 <input id="student-id" inputmode="numeric" maxlength="20" required></label>
+        <label>이름 <input id="name" maxlength="30" required></label>
+        <button type="submit" id="apply-button">신청하기</button>
+      </form>
+    </section>
+
+    <p id="message" class="message"></p>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const noticeId = new URLSearchParams(location.search).get('id');
+    const article = document.getElementById('notice');
+    const applySection = document.getElementById('apply-section');
+    const message = document.getElementById('message');
+    const button = document.getElementById('apply-button');
+
+    async function loadNotice() {
+      try {
+        const n = await api(`/api/notices/${encodeURIComponent(noticeId)}`);
+        document.title = n.title;
+        article.innerHTML = `
+          <h1>${escapeHtml(n.title)}</h1>
+          <p class="notice-meta">${escapeHtml(n.created_at)} · 정원 ${n.capacity}명 ${seatBadge(n.remaining, n.capacity)}</p>
+          <div class="content">${escapeHtml(n.content)}</div>`;
+        applySection.hidden = false;
+        button.disabled = n.remaining <= 0;
+        button.textContent = n.remaining <= 0 ? '마감되었습니다' : '신청하기';
+      } catch (e) {
+        article.innerHTML = '<h1>공지를 찾을 수 없습니다</h1>';
+        showMessage(message, e.message, 'fail');
+      }
+    }
+
+    document.getElementById('apply-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      button.disabled = true;   // 연속 클릭 방지
+      try {
+        const result = await api(`/api/notices/${encodeURIComponent(noticeId)}/apply`, {
+          method: 'POST',
+          body: JSON.stringify({
+            student_id: document.getElementById('student-id').value.trim(),
+            name: document.getElementById('name').value.trim(),
+          }),
+        });
+        showMessage(message, result.message, 'ok');
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+      }
+      await loadNotice();   // 남은 자리 갱신
+    });
+
+    loadNotice();
+  </script>
+</body>
+</html>

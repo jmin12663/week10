@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">학과 공지</a>
+    <a href="admin.html" class="nav-link">관리자</a>
+  </header>
+
+  <main>
+    <h1>관리자</h1>
+
+    <section class="card">
+      <label>관리자 비밀번호 <input id="password" type="password"></label>
+    </section>
+
+    <section class="card">
+      <h2>공지 작성</h2>
+      <form id="notice-form">
+        <label>제목 <input id="title" maxlength="100" required></label>
+        <label>내용 <textarea id="content" rows="5" maxlength="5000" required></textarea></label>
+        <label>정원 <input id="capacity" type="number" min="1" max="10000" required></label>
+        <button type="submit">등록</button>
+      </form>
+      <p id="create-message" class="message"></p>
+    </section>
+
+    <section class="card">
+      <h2>신청자 명단</h2>
+      <div class="inline-form">
+        <select id="notice-select"></select>
+        <button id="load-applicants" class="secondary">조회</button>
+      </div>
+      <p id="list-message" class="message"></p>
+      <table id="applicant-table" hidden>
+        <thead><tr><th>#</th><th>학번</th><th>이름</th><th>신청 시각</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const passwordInput = document.getElementById('password');
+    const createMessage = document.getElementById('create-message');
+    const listMessage = document.getElementById('list-message');
+    const select = document.getElementById('notice-select');
+    const table = document.getElementById('applicant-table');
+
+    // 새로고침해도 비밀번호를 다시 안 치도록 탭이 열려 있는 동안만 기억
+    try { passwordInput.value = sessionStorage.getItem('adminPassword') || ''; } catch (e) {}
+    passwordInput.addEventListener('input', () => {
+      try { sessionStorage.setItem('adminPassword', passwordInput.value); } catch (e) {}
+    });
+
+    const adminHeaders = () => ({ 'X-Admin-Password': passwordInput.value });
+
+    async function loadNoticeOptions() {
+      try {
+        const { notices } = await api('/api/notices');
+        select.innerHTML = notices.length
+          ? notices.map(n => `<option value="${n.id}">#${n.id} ${escapeHtml(n.title)} (${n.applied}/${n.capacity})</option>`).join('')
+          : '<option value="">공지 없음</option>';
+      } catch (e) {
+        showMessage(listMessage, e.message, 'fail');
+      }
+    }
+
+    document.getElementById('notice-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const result = await api('/api/notices', {
+          method: 'POST',
+          headers: adminHeaders(),
+          body: JSON.stringify({
+            title: document.getElementById('title').value,
+            content: document.getElementById('content').value,
+            capacity: Number(document.getElementById('capacity').value),
+          }),
+        });
+        showMessage(createMessage, `공지 #${result.id}가 등록되었습니다.`, 'ok');
+        event.target.reset();
+        loadNoticeOptions();
+      } catch (e) {
+        showMessage(createMessage, e.message, 'fail');
+      }
+    });
+
+    document.getElementById('load-applicants').addEventListener('click', async () => {
+      table.hidden = true;
+      if (!select.value) return showMessage(listMessage, '조회할 공지가 없습니다.', 'fail');
+      try {
+        const { notice, applications } = await api(`/api/notices/${select.value}/applications`, {
+          headers: adminHeaders(),
+        });
+        showMessage(listMessage, `${notice.title} — 신청 ${notice.applied} / 정원 ${notice.capacity}`, 'ok');
+        if (applications.length === 0) {
+          listMessage.textContent += ' (신청자 없음)';
+          return;
+        }
+        table.querySelector('tbody').innerHTML = applications.map((a, i) => `
+          <tr><td>${i + 1}</td><td>${escapeHtml(a.student_id)}</td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.created_at)}</td></tr>`).join('');
+        table.hidden = false;
+      } catch (e) {
+        showMessage(listMessage, e.message, 'fail');
+      }
+    });
+
+    loadNoticeOptions();
+  </script>
+</body>
+</html>

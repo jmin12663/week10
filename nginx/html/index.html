@@ -1,1 +1,54 @@
-HELLO
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학과 공지 · 선착순 신청</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">학과 공지</a>
+    <a href="admin.html" class="nav-link">관리자</a>
+  </header>
+
+  <main>
+    <div class="title-row">
+      <h1>공지 목록</h1>
+      <button id="refresh" class="secondary">새로고침</button>
+    </div>
+    <ul id="notice-list" class="notice-list"></ul>
+    <p id="message" class="message"></p>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const list = document.getElementById('notice-list');
+    const message = document.getElementById('message');
+
+    async function loadNotices() {
+      try {
+        const { notices } = await api('/api/notices');
+        if (notices.length === 0) {
+          list.innerHTML = '<li class="empty">등록된 공지가 없습니다.</li>';
+          return;
+        }
+        list.innerHTML = notices.map(n => `
+          <li>
+            <a href="notice.html?id=${n.id}">
+              <span class="notice-title">${escapeHtml(n.title)}</span>
+              <span class="notice-meta">${escapeHtml(n.created_at)}</span>
+              ${seatBadge(n.remaining, n.capacity)}
+            </a>
+          </li>`).join('');
+        message.className = 'message';
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', loadNotices);
+    loadNotices();
+  </script>
+</body>
+</html>
