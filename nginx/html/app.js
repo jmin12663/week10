@@ -42,8 +42,16 @@ function clearAdminPassword() {
   try { sessionStorage.removeItem('adminPassword'); } catch (e) {}
 }
 
-// 남은 자리 배지
+// 글 종류 라벨
+function categoryChip(category) {
+  return category === 'recruit'
+    ? '<span class="type-chip recruit">모집</span>'
+    : '<span class="type-chip notice">공지</span>';
+}
+
+// 남은 자리 배지 (모집글만)
 function seatBadge(remaining, capacity) {
+  if (capacity === null || capacity === undefined) return '';
   if (remaining <= 0) return '<span class="badge closed">마감</span>';
   return `<span class="badge open">${remaining} / ${capacity}석 남음</span>`;
 }

@@ -19,18 +19,22 @@
     <h1>관리자</h1>
 
     <section class="card">
-      <h2>공지 작성</h2>
+      <h2>글 작성</h2>
       <form id="notice-form">
+        <div class="segmented" role="radiogroup" aria-label="글 종류">
+          <label><input type="radio" name="category" value="notice" checked><span>공지</span></label>
+          <label><input type="radio" name="category" value="recruit"><span>모집글</span></label>
+        </div>
         <label>제목 <input id="title" maxlength="100" required></label>
         <label>내용 <textarea id="content" rows="5" maxlength="5000" required></textarea></label>
-        <label>정원 <input id="capacity" type="number" min="1" max="10000" required></label>
-        <button type="submit">등록</button>
+        <label id="capacity-field" hidden>모집 정원 <input id="capacity" type="number" min="1" max="10000"></label>
+        <button type="submit" id="submit-button">공지 등록</button>
       </form>
       <p id="create-message" class="message"></p>
     </section>
 
     <section class="card">
-      <h2>신청자 명단</h2>
+      <h2>모집글 신청자 명단</h2>
       <div class="inline-form">
         <select id="notice-select"></select>
         <button id="load-applicants" class="secondary">조회</button>
@@ -48,10 +52,16 @@
     // 로그인 안 한 상태로 들어오면 로그인 화면으로
     if (!getAdminPassword()) location.replace('login.html');
 
+    const form = document.getElementById('notice-form');
+    const capacityField = document.getElementById('capacity-field');
+    const capacityInput = document.getElementById('capacity');
+    const submitButton = document.getElementById('submit-button');
     const createMessage = document.getElementById('create-message');
     const listMessage = document.getElementById('list-message');
     const select = document.getElementById('notice-select');
     const table = document.getElementById('applicant-table');
+
+    const selectedCategory = () => form.querySelector('input[name="category"]:checked').value;
 
     // 관리자 API 호출: 비밀번호를 헤더에 붙이고, 401이면 로그인 화면으로 보냄
     async function adminApi(path, options = {}) {
@@ -69,36 +79,48 @@
       }
     }
 
+    // 종류에 따라 정원 칸과 버튼 문구 전환
+    function updateFormForCategory() {
+      const isRecruit = selectedCategory() === 'recruit';
+      capacityField.hidden = !isRecruit;
+      capacityInput.required = isRecruit;
+      submitButton.textContent = isRecruit ? '모집글 등록' : '공지 등록';
+    }
+    form.querySelectorAll('input[name="category"]').forEach(r => r.addEventListener('change', updateFormForCategory));
+
     document.getElementById('logout').addEventListener('click', () => {
       clearAdminPassword();
       location.href = 'index.html';
     });
 
-    async function loadNoticeOptions() {
+    async function loadRecruitOptions() {
       try {
-        const { notices } = await api('/api/notices');
+        const { notices } = await api('/api/notices?category=recruit');
         select.innerHTML = notices.length
           ? notices.map(n => `<option value="${n.id}">#${n.id} ${escapeHtml(n.title)} (${n.applied}/${n.capacity})</option>`).join('')
-          : '<option value="">공지 없음</option>';
+          : '<option value="">모집글 없음</option>';
       } catch (e) {
         showMessage(listMessage, e.message, 'fail');
       }
     }
 
-    document.getElementById('notice-form').addEventListener('submit', async (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const category = selectedCategory();
+      const body = {
+        category,
+        title: document.getElementById('title').value,
+        content: document.getElementById('content').value,
+      };
+      if (category === 'recruit') body.capacity = Number(capacityInput.value);
+
       try {
-        const result = await adminApi('/api/notices', {
-          method: 'POST',
-          body: JSON.stringify({
-            title: document.getElementById('title').value,
-            content: document.getElementById('content').value,
-            capacity: Number(document.getElementById('capacity').value),
-          }),
-        });
-        showMessage(createMessage, `공지 #${result.id}가 등록되었습니다.`, 'ok');
-        event.target.reset();
-        loadNoticeOptions();
+        const result = await adminApi('/api/notices', { method: 'POST', body: JSON.stringify(body) });
+        const label = category === 'recruit' ? '모집글' : '공지';
+        showMessage(createMessage, `${label} #${result.id}가 등록되었습니다.`, 'ok');
+        form.reset();
+        updateFormForCategory();
+        loadRecruitOptions();
       } catch (e) {
         showMessage(createMessage, e.message, 'fail');
       }
@@ -106,7 +128,7 @@
 
     document.getElementById('load-applicants').addEventListener('click', async () => {
       table.hidden = true;
-      if (!select.value) return showMessage(listMessage, '조회할 공지가 없습니다.', 'fail');
+      if (!select.value) return showMessage(listMessage, '조회할 모집글이 없습니다.', 'fail');
       try {
         const { notice, applications } = await adminApi(`/api/notices/${select.value}/applications`);
         showMessage(listMessage, `${notice.title} — 신청 ${notice.applied} / 정원 ${notice.capacity}`, 'ok');
@@ -122,7 +144,8 @@
       }
     });
 
-    loadNoticeOptions();
+    updateFormForCategory();
+    loadRecruitOptions();
   </script>
 </body>
 </html>

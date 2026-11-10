@@ -142,14 +142,15 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16p
   box-shadow: var(--shadow);
   transition: transform .15s, border-color .15s;
 }
-.notice-list a::before {           /* 왼쪽 컬러 띠 */
+.notice-list a::before {           /* 왼쪽 컬러 띠: 공지는 먹색, 모집은 주황 */
   content: '';
   position: absolute;
   left: 0; top: 14px; bottom: 14px;
   width: 4px;
   border-radius: 0 4px 4px 0;
-  background: var(--accent);
+  background: var(--ink);
 }
+.notice-list a.recruit::before { background: var(--accent); }
 .notice-list a:hover { transform: translateY(-2px); border-color: var(--ink); }
 .notice-title { grid-column: 1; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
 .notice-list .notice-meta { grid-column: 1; grid-row: 2; }
@@ -164,7 +165,7 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16p
 }
 
 /* ── 공지 상세 ─────────────────────────────── */
-article.card h1 { font-size: 26px; margin-bottom: 8px; }
+article.card h1 { font-size: 26px; margin: 8px 0; }
 article.card .notice-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 .content {
   white-space: pre-wrap;
@@ -173,6 +174,38 @@ article.card .notice-meta { display: flex; flex-wrap: wrap; align-items: center;
   border-top: 1px dashed var(--line);   /* 티켓 절취선 */
   font-size: 15px;
 }
+
+/* ── 탭 ───────────────────────────────────── */
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  background: #ece6dc;
+  border-radius: 12px;
+}
+.tab {
+  padding: 8px 18px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 14px;
+  box-shadow: none;
+}
+.tab:hover { background: rgba(255, 255, 255, .6); color: var(--ink); }
+.tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(29, 27, 25, .12); }
+
+/* 글 종류 라벨 */
+.type-chip {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+.type-chip.notice { background: var(--ink); color: #fff; }
+.type-chip.recruit { background: var(--accent-soft); color: var(--accent-dark); }
 
 /* ── 배지 ─────────────────────────────────── */
 .badge {
@@ -230,6 +263,25 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(29, 27, 25, .08);
 }
 textarea { resize: vertical; }
+
+/* 글 종류 선택 (공지 / 모집글) */
+.segmented { display: flex; gap: 8px; margin-bottom: 18px; }
+.segmented label { flex: 1; margin: 0; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span {
+  display: block;
+  padding: 12px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fcfaf7;
+  color: var(--ink-soft);
+  font-size: 15px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.segmented input:checked + span { border-color: var(--ink); background: var(--ink); color: #fff; }
+.segmented input:focus-visible + span { box-shadow: 0 0 0 3px rgba(29, 27, 25, .15); }
 
 .inline-form { display: flex; gap: 8px; }
 .inline-form select { margin-top: 0; }
