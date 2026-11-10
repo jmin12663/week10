@@ -1,0 +1,27 @@
+name: notice-app
+services:
+  api:
+    build: ./api
+    image: notice-api
+    container_name: notice_api
+    environment:
+      DATA_DIR: /data
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - data:/data
+    restart: unless-stopped
+  nginx:
+    build: ./nginx
+    image: notice-web
+    container_name: notice_web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+networks:
+  default:
+    name: notice_net
+volumes:
+  data:
+    name: notice_data
