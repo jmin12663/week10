@@ -7,17 +7,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <a href="index.html" class="logo">학과 공지</a>
-    <a href="admin.html" class="nav-link">관리자</a>
+  <header class="admin">
+    <a href="admin.html" class="logo">학과 공지 <span class="mode">관리자</span></a>
+    <nav>
+      <a href="index.html" class="nav-link">일반 화면</a>
+      <button id="logout" class="link-button">로그아웃</button>
+    </nav>
   </header>
 
   <main>
     <h1>관리자</h1>
-
-    <section class="card">
-      <label>관리자 비밀번호 <input id="password" type="password"></label>
-    </section>
 
     <section class="card">
       <h2>공지 작성</h2>
@@ -46,19 +45,34 @@
 
   <script src="app.js"></script>
   <script>
-    const passwordInput = document.getElementById('password');
+    // 로그인 안 한 상태로 들어오면 로그인 화면으로
+    if (!getAdminPassword()) location.replace('login.html');
+
     const createMessage = document.getElementById('create-message');
     const listMessage = document.getElementById('list-message');
     const select = document.getElementById('notice-select');
     const table = document.getElementById('applicant-table');
 
-    // 새로고침해도 비밀번호를 다시 안 치도록 탭이 열려 있는 동안만 기억
-    try { passwordInput.value = sessionStorage.getItem('adminPassword') || ''; } catch (e) {}
-    passwordInput.addEventListener('input', () => {
-      try { sessionStorage.setItem('adminPassword', passwordInput.value); } catch (e) {}
-    });
+    // 관리자 API 호출: 비밀번호를 헤더에 붙이고, 401이면 로그인 화면으로 보냄
+    async function adminApi(path, options = {}) {
+      try {
+        return await api(path, {
+          ...options,
+          headers: { 'X-Admin-Password': getAdminPassword(), ...(options.headers || {}) },
+        });
+      } catch (e) {
+        if (e.status === 401) {
+          clearAdminPassword();
+          location.replace('login.html');
+        }
+        throw e;
+      }
+    }
 
-    const adminHeaders = () => ({ 'X-Admin-Password': passwordInput.value });
+    document.getElementById('logout').addEventListener('click', () => {
+      clearAdminPassword();
+      location.href = 'index.html';
+    });
 
     async function loadNoticeOptions() {
       try {
@@ -74,9 +88,8 @@
     document.getElementById('notice-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
-        const result = await api('/api/notices', {
+        const result = await adminApi('/api/notices', {
           method: 'POST',
-          headers: adminHeaders(),
           body: JSON.stringify({
             title: document.getElementById('title').value,
             content: document.getElementById('content').value,
@@ -95,9 +108,7 @@
       table.hidden = true;
       if (!select.value) return showMessage(listMessage, '조회할 공지가 없습니다.', 'fail');
       try {
-        const { notice, applications } = await api(`/api/notices/${select.value}/applications`, {
-          headers: adminHeaders(),
-        });
+        const { notice, applications } = await adminApi(`/api/notices/${select.value}/applications`);
         showMessage(listMessage, `${notice.title} — 신청 ${notice.applied} / 정원 ${notice.capacity}`, 'ok');
         if (applications.length === 0) {
           listMessage.textContent += ' (신청자 없음)';

@@ -31,6 +31,17 @@ function showMessage(el, text, type) {
   el.className = `message ${type}`;
 }
 
+// 관리자 로그인 상태: 브라우저 탭을 닫으면 사라지는 sessionStorage에 보관
+function getAdminPassword() {
+  try { return sessionStorage.getItem('adminPassword') || ''; } catch (e) { return ''; }
+}
+function setAdminPassword(password) {
+  try { sessionStorage.setItem('adminPassword', password); } catch (e) {}
+}
+function clearAdminPassword() {
+  try { sessionStorage.removeItem('adminPassword'); } catch (e) {}
+}
+
 // 남은 자리 배지
 function seatBadge(remaining, capacity) {
   if (remaining <= 0) return '<span class="badge closed">마감</span>';

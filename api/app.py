@@ -161,6 +161,14 @@ def list_applications(notice_id):
                           'WHERE notice_id = ? ORDER BY id', (notice_id,)).fetchall()
     return jsonify(notice=dict(notice), applications=[dict(r) for r in rows])
 
+# 6. 관리자 로그인 페이지
+@app.post('/api/admin/login')
+def admin_login():
+    data = request.get_json(silent=True)
+    password = data.get('password') if isinstance(data, dict) else None
+    if ADMIN_PASSWORD == '' or password != ADMIN_PASSWORD:
+        return error('비밀번호가 올바르지 않습니다.', 401)
+    return jsonify(message='관리자 인증 성공')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
