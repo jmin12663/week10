@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>채팅방 · 같이 타요</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">같이 타요</a>
+    <nav>
+      <span id="who" class="who"></span>
+      <button id="logout" class="nav-link" type="button">로그아웃</button>
+    </nav>
+  </header>
+
+  <main>
+    <a href="index.html" class="back">← 목록으로</a>
+    <p id="message" class="message"></p>
+
+    <div id="room" hidden>
+      <section class="card room-info">
+        <div class="room-head">
+          <div>
+            <p class="room-time"><strong id="depart"></strong> <span id="until"></span></p>
+            <h1 class="room-route"><span id="meet"></span> <span class="arrow">→</span> <span id="dest"></span></h1>
+          </div>
+          <div id="seat"></div>
+        </div>
+        <ul id="members" class="members"></ul>
+        <div class="room-actions" id="actions"></div>
+      </section>
+
+      <section class="card chat">
+        <div class="chat-head">
+          <h2>채팅</h2>
+          <p class="live" id="live"><span class="dot"></span><span id="live-text">연결 중…</span></p>
+        </div>
+        <div id="chat-log" class="chat-log">
+          <button id="more" class="secondary small more" hidden>이전 대화 더 보기</button>
+          <ul id="chat-list"></ul>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="500" placeholder="메시지 입력" autocomplete="off" disabled>
+          <button type="submit" id="send" disabled>전송</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const partyId = Number(new URLSearchParams(location.search).get('id'));
+    const message = document.getElementById('message');
+    const $ = (id) => document.getElementById(id);
+    let me = null;
+    let party = null;
+    let ws = null;
+    let leaving = false;          // 직접 나가거나 쫓겨나서 재연결하면 안 되는 상태
+    const shownIds = new Set();   // 재연결 때 같은 메시지가 두 번 보이지 않게
+
+    // ── 화면 그리기 ──
+    function renderParty(p) {
+      party = { ...party, ...p };
+      $('depart').textContent = formatDepart(party.depart_at);
+      $('until').textContent = untilDepart(party.depart_at);
+      $('meet').textContent = party.meet_place;
+      $('dest').textContent = party.destination;
+      $('seat').innerHTML = seatBadge(party);
+      document.title = `${party.destination} 파티 · 같이 타요`;
+
+      const amHost = party.host.id === me.id;
+      $('actions').innerHTML = amHost
+        ? `<a href="party-form.html?id=${partyId}" class="button secondary small">모집글 수정</a>
+           <button class="danger small" id="delete">모집글 삭제</button>`
+        : `<button class="secondary small" id="leave">파티 나가기</button>`;
+    }
+
+    function renderMembers(members) {
+      const amHost = party.host.id === me.id;
+      $('members').innerHTML = members.map(m => `
+        <li>
+          <span class="member-name">${escapeHtml(m.department)} ${escapeHtml(m.name)}</span>
+          ${m.is_host ? '<span class="chip host">방장</span>' : ''}
+          ${m.id === me.id ? '<span class="chip">나</span>' : ''}
+          ${amHost && !m.is_host ? `<button class="danger tiny kick" data-id="${m.id}">강퇴</button>` : ''}
+        </li>`).join('')
+        + Array(Math.max(0, party.capacity - members.length)).fill('<li class="empty-seat">빈 자리</li>').join('');
+    }
+
+    function messageItem(m) {
+      if (m.type === 'system') {
+        return `<li class="system">${escapeHtml(m.content)}</li>`;
+      }
+      const mine = m.user.id === me.id;
+      return `
+        <li class="bubble ${mine ? 'mine' : ''}">
+          ${mine ? '' : `<span class="sender">${escapeHtml(m.user.department)} ${escapeHtml(m.user.name)}</span>`}
+          <span class="text">${escapeHtml(m.content)}</span>
+          <time>${formatClock(m.created_at)}</time>
+        </li>`;
+    }
+
+    function appendMessage(m) {
+      if (shownIds.has(m.id)) return;
+      shownIds.add(m.id);
+      const log = $('chat-log');
+      const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+      $('chat-list').insertAdjacentHTML('beforeend', messageItem(m));
+      if (nearBottom || (m.user && m.user.id === me.id)) log.scrollTop = log.scrollHeight;
+    }
+
+    // ── 데이터 불러오기 ──
+    async function loadParty() {
+      const data = await api(`/api/parties/${partyId}`);
+      party = null;
+      renderParty(data.party);
+      renderMembers(data.members);
+    }
+
+    async function loadMessages() {
+      const data = await api(`/api/parties/${partyId}/messages`);
+      $('chat-list').innerHTML = '';
+      shownIds.clear();
+      data.messages.forEach(appendMessage);
+      $('more').hidden = !data.has_more;
+      $('more').dataset.before = data.messages.length ? data.messages[0].id : '';
+      $('chat-log').scrollTop = $('chat-log').scrollHeight;
+    }
+
+    $('more').addEventListener('click', async () => {
+      const data = await api(`/api/parties/${partyId}/messages?before_id=${$('more').dataset.before}`);
+      const log = $('chat-log');
+      const prevHeight = log.scrollHeight;
+      const html = data.messages.filter(m => !shownIds.has(m.id)).map(m => { shownIds.add(m.id); return messageItem(m); }).join('');
+      $('chat-list').insertAdjacentHTML('afterbegin', html);
+      log.scrollTop += log.scrollHeight - prevHeight;   // 보던 위치 유지
+      $('more').hidden = !data.has_more;
+      if (data.messages.length) $('more').dataset.before = data.messages[0].id;
+    });
+
+    // ── 방을 떠나야 하는 상황 (강퇴·삭제) ──
+    function exitRoom(text) {
+      leaving = true;
+      if (ws) ws.close();
+      alert(text);
+      location.href = 'index.html';
+    }
+
+    // ── WebSocket ──
+    function setLive(ok, text) {
+      $('live').classList.toggle('on', ok);
+      $('live-text').textContent = text;
+      $('chat-input').disabled = !ok;
+      $('send').disabled = !ok;
+    }
+
+    function connect() {
+      ws = new WebSocket(wsUrl(`/api/ws/parties/${partyId}`));
+      ws.onopen = () => setLive(true, '실시간 연결됨');
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case 'chat':
+          case 'system':
+            appendMessage(data.message);
+            break;
+          case 'members':
+            renderParty({ member_count: data.member_count,
+                          is_full: data.member_count >= party.capacity });
+            renderMembers(data.members);
+            break;
+          case 'party_updated':
+            renderParty(data.party);
+            break;
+          case 'kicked':
+            exitRoom('방장이 파티에서 내보냈습니다.');
+            break;
+          case 'party_deleted':
+            exitRoom('방장이 모집글을 삭제해서 채팅방이 닫혔습니다.');
+            break;
+          case 'error':
+            showMessage(message, data.error, 'fail');
+            break;
+        }
+      };
+      ws.onclose = () => {
+        if (leaving) return;
+        setLive(false, '연결 끊김 · 다시 연결 중…');
+        setTimeout(async () => {
+          try {
+            await loadParty();        // 그 사이 강퇴·삭제됐는지 확인 (403/404면 catch로)
+            await loadMessages();     // 끊긴 동안 놓친 메시지 채우기
+            connect();
+          } catch (e) {
+            if (e.status === 403) exitRoom('더 이상 이 파티의 참여자가 아닙니다.');
+            else if (e.status === 404) exitRoom('삭제된 파티입니다.');
+            else ws.onclose();        // 서버가 아직 안 살아났으면 다시 시도
+          }
+        }, 2000);
+      };
+    }
+
+    $('chat-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = $('chat-input');
+      const content = input.value.trim();
+      if (!content || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: 'chat', content }));
+      input.value = '';
+      input.focus();
+    });
+
+    // ── 버튼: 나가기 / 삭제 / 강퇴 ──
+    document.addEventListener('click', async (event) => {
+      const target = event.target;
+      try {
+        if (target.id === 'leave') {
+          if (!confirm('파티에서 나갈까요?')) return;
+          leaving = true;
+          await api(`/api/parties/${partyId}/members/me`, { method: 'DELETE' });
+          location.href = 'index.html';
+        } else if (target.id === 'delete') {
+          if (!confirm('모집글을 삭제하면 채팅방도 함께 사라집니다. 삭제할까요?')) return;
+          leaving = true;
+          await api(`/api/parties/${partyId}`, { method: 'DELETE' });
+          location.href = 'index.html';
+        } else if (target.classList.contains('kick')) {
+          if (!confirm('이 참여자를 내보낼까요? 다시 입장할 수 없게 됩니다.')) return;
+          await api(`/api/parties/${partyId}/members/${target.dataset.id}`, { method: 'DELETE' });
+        }
+      } catch (e) {
+        leaving = false;
+        showMessage(message, e.message, 'fail');
+      }
+    });
+
+    async function init() {
+      me = await requireLogin();
+      if (!partyId) {
+        showMessage(message, '잘못된 주소입니다.', 'fail');
+        return;
+      }
+      try {
+        await loadParty();
+        await loadMessages();
+      } catch (e) {
+        showMessage(message, e.status === 403 ? '파티에 참여한 사람만 채팅방에 들어올 수 있습니다.'
+                           : e.status === 404 ? '삭제되었거나 없는 파티입니다.' : e.message, 'fail');
+        return;
+      }
+      $('room').hidden = false;
+      $('chat-log').scrollTop = $('chat-log').scrollHeight;
+      connect();
+      setInterval(() => party && ($('until').textContent = untilDepart(party.depart_at)), 30000);
+    }
+
+    init();
+  </script>
+</body>
+</html>

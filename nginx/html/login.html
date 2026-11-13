@@ -3,41 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>관리자 로그인</title>
+  <title>로그인 · 같이 타요</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <a href="index.html" class="logo">학과 공지</a>
-    <a href="login.html" class="nav-link">관리자</a>
+    <a href="index.html" class="logo">같이 타요</a>
+    <a href="signup.html" class="nav-link">회원가입</a>
   </header>
 
   <main class="narrow">
     <section class="card login-card">
-      <h1>관리자 로그인</h1>
-      <p class="hint">공지 작성과 신청자 명단은 관리자만 이용할 수 있습니다.</p>
+      <h1>로그인</h1>
+      <p class="hint">같은 방향 가는 학교 사람과 택시를 나눠 타세요.</p>
       <form id="login-form">
-        <label>비밀번호 <input id="password" type="password" autocomplete="current-password" required autofocus></label>
-        <button type="submit" class="full">입장</button>
+        <label>아이디 <input id="username" autocomplete="username" required autofocus></label>
+        <label>비밀번호 <input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="full">로그인</button>
       </form>
       <p id="message" class="message"></p>
-      <a href="index.html" class="back">← 일반 화면으로</a>
+      <p class="switch">처음이신가요? <a href="signup.html">회원가입</a></p>
     </section>
   </main>
 
   <script src="app.js"></script>
   <script>
-    // 이미 로그인한 상태면 바로 관리자 페이지로
-    if (getAdminPassword()) location.replace('admin.html');
+    // 로그인 후 돌아갈 페이지 (같은 사이트 경로만 허용)
+    const next = new URLSearchParams(location.search).get('next');
+    const target = next && next.startsWith('/') && !next.startsWith('//') ? next : 'index.html';
+
+    // 이미 로그인한 상태면 바로 이동
+    api('/api/users/me').then(() => location.replace(target)).catch(() => {});
+
+    if (new URLSearchParams(location.search).get('joined') === '1') {
+      showMessage(document.getElementById('message'), '가입이 완료되었습니다. 로그인해 주세요.', 'ok');
+    }
 
     document.getElementById('login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const message = document.getElementById('message');
-      const password = document.getElementById('password').value;
       try {
-        await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
-        setAdminPassword(password);
-        location.href = 'admin.html';
+        await api('/api/sessions', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        location.href = target;
       } catch (e) {
         showMessage(message, e.message, 'fail');
       }

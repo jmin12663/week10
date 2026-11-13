@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>파티 만들기 · 같이 타요</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">같이 타요</a>
+    <nav>
+      <span id="who" class="who"></span>
+      <button id="logout" class="nav-link" type="button">로그아웃</button>
+    </nav>
+  </header>
+
+  <main class="narrow">
+    <a id="back" href="index.html" class="back">← 목록으로</a>
+    <section class="card">
+      <h1 id="title">파티 만들기</h1>
+      <p class="hint" id="hint">만든 사람이 방장이 되고, 최대 4명까지 함께 탈 수 있어요.</p>
+      <form id="party-form">
+        <label>만나는 장소 <input id="meet_place" required maxlength="50" placeholder="예: 정문, 기숙사 앞"></label>
+        <label>목적지 <input id="destination" required maxlength="50" placeholder="예: 양주역"></label>
+        <label>출발 시간 <input id="depart_at" type="datetime-local" required></label>
+        <button type="submit" class="full" id="submit">파티 만들기</button>
+      </form>
+      <p id="message" class="message"></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const partyId = new URLSearchParams(location.search).get('id');   // 있으면 수정 모드
+    const message = document.getElementById('message');
+    const field = (id) => document.getElementById(id);
+    let original = null;
+
+    // 수정 모드면 기존 내용을 불러오기 전까지 저장 버튼을 막음 (입력한 값이 덮어써지는 것 방지)
+    if (partyId) field('submit').disabled = true;
+    field('depart_at').min = kstInputValue(1);
+    field('depart_at').max = kstInputValue(7 * 24 * 60);
+
+    async function init() {
+      await requireLogin();
+      if (!partyId) {
+        field('depart_at').value = kstInputValue(30);   // 기본값: 30분 뒤
+        return;
+      }
+      document.title = '파티 수정 · 같이 타요';
+      field('title').textContent = '파티 수정';
+      field('hint').textContent = '바뀐 내용은 채팅방에 자동으로 안내됩니다.';
+      field('submit').textContent = '수정하기';
+      field('back').href = `party.html?id=${partyId}`;
+      field('back').textContent = '← 채팅방으로';
+      try {
+        const { party } = await api(`/api/parties/${partyId}`);
+        if (!party.is_host) throw new Error('방장만 수정할 수 있습니다.');
+        original = party;
+        field('meet_place').value = party.meet_place;
+        field('destination').value = party.destination;
+        field('depart_at').value = party.depart_at.replace(' ', 'T');
+        field('submit').disabled = false;
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+        field('party-form').hidden = true;
+      }
+    }
+
+    field('party-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const body = {
+        meet_place: field('meet_place').value.trim(),
+        destination: field('destination').value.trim(),
+        depart_at: field('depart_at').value,
+      };
+      try {
+        if (partyId) {
+          // 바뀐 항목만 보냄
+          const changes = {};
+          for (const key of Object.keys(body)) {
+            const before = key === 'depart_at' ? original.depart_at.replace(' ', 'T') : original[key];
+            if (body[key] !== before) changes[key] = body[key];
+          }
+          if (Object.keys(changes).length) {
+            await api(`/api/parties/${partyId}`, { method: 'PATCH', body: JSON.stringify(changes) });
+          }
+          location.href = `party.html?id=${partyId}`;
+        } else {
+          const party = await api('/api/parties', { method: 'POST', body: JSON.stringify(body) });
+          location.href = `party.html?id=${party.id}`;
+        }
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회원가입 · 같이 타요</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">같이 타요</a>
+    <a href="login.html" class="nav-link">로그인</a>
+  </header>
+
+  <main class="narrow">
+    <section class="card login-card">
+      <h1>회원가입</h1>
+      <p class="hint">다른 사용자에게는 학과와 가린 이름(신*민)만 보입니다. 학번은 공개되지 않아요.</p>
+      <form id="signup-form">
+        <label>아이디 <input id="username" autocomplete="username" required
+               pattern="[a-z0-9]{4,20}" placeholder="영문 소문자·숫자 4~20자"></label>
+        <label>비밀번호 <input id="password" type="password" autocomplete="new-password" required
+               minlength="8" maxlength="64" placeholder="8자 이상"></label>
+        <label>비밀번호 확인 <input id="password2" type="password" autocomplete="new-password" required></label>
+        <label>학번 <input id="student_id" inputmode="numeric" required pattern="\d{7,10}" placeholder="숫자만"></label>
+        <label>학과 <input id="department" required maxlength="30" placeholder="예: 컴퓨터공학과"></label>
+        <label>이름 <input id="name" autocomplete="name" required minlength="2" maxlength="20"></label>
+        <button type="submit" class="full">가입하기</button>
+      </form>
+      <p id="message" class="message"></p>
+      <p class="switch">이미 계정이 있나요? <a href="login.html">로그인</a></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    const value = (id) => document.getElementById(id).value.trim();
+
+    document.getElementById('signup-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = document.getElementById('message');
+      if (document.getElementById('password').value !== document.getElementById('password2').value) {
+        showMessage(message, '비밀번호 확인이 일치하지 않습니다.', 'fail');
+        return;
+      }
+      try {
+        await api('/api/users', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: value('username'),
+            password: document.getElementById('password').value,
+            student_id: value('student_id'),
+            department: value('department'),
+            name: value('name'),
+          }),
+        });
+        location.href = 'login.html?joined=1';
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+      }
+    });
+  </script>
+</body>
+</html>

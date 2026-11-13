@@ -3,76 +3,138 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>학과 공지 · 선착순 모집</title>
+  <title>택시 파티 · 같이 타요</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <a href="index.html" class="logo">학과 공지</a>
-    <a href="login.html" class="nav-link">관리자</a>
+    <a href="index.html" class="logo">같이 타요</a>
+    <nav>
+      <span id="who" class="who"></span>
+      <button id="logout" class="nav-link" type="button">로그아웃</button>
+    </nav>
   </header>
 
   <main>
     <div class="title-row">
-      <h1>게시판</h1>
-      <button id="refresh" class="secondary">새로고침</button>
+      <h1>택시 파티</h1>
+      <a href="party-form.html" class="button">+ 파티 만들기</a>
     </div>
+    <p class="live" id="live"><span class="dot"></span><span id="live-text">연결 중…</span></p>
 
-    <div class="tabs" role="tablist">
-      <button class="tab active" data-category="">전체</button>
-      <button class="tab" data-category="notice">공지</button>
-      <button class="tab" data-category="recruit">모집</button>
-    </div>
+    <form id="search-form" class="search">
+      <input id="destination" placeholder="목적지 검색 (예: 양주역)" maxlength="50">
+      <input id="date" type="date">
+      <button type="submit" class="secondary">검색</button>
+      <button type="button" id="reset" class="secondary">초기화</button>
+    </form>
 
-    <ul id="notice-list" class="notice-list"></ul>
     <p id="message" class="message"></p>
+    <ul id="party-list" class="party-list"></ul>
   </main>
 
   <script src="app.js"></script>
   <script>
-    const list = document.getElementById('notice-list');
+    const list = document.getElementById('party-list');
     const message = document.getElementById('message');
-    const tabs = document.querySelectorAll('.tab');
+    const destinationInput = document.getElementById('destination');
+    const dateInput = document.getElementById('date');
 
-    // 주소의 ?category= 값으로 시작 탭 결정 (새로고침해도 탭 유지)
-    let category = new URLSearchParams(location.search).get('category') || '';
-
-    function renderTabs() {
-      tabs.forEach(t => t.classList.toggle('active', t.dataset.category === category));
+    function partyItem(p) {
+      let action;
+      if (p.joined) {
+        action = `<a href="party.html?id=${p.id}" class="button small">채팅방</a>`;
+      } else if (p.is_closed) {
+        action = `<button class="small" disabled>마감</button>`;
+      } else {
+        action = `<button class="small join" data-id="${p.id}">입장</button>`;
+      }
+      return `
+        <li class="party ${p.is_closed ? 'closed' : ''} ${p.joined ? 'mine' : ''}">
+          <div class="party-time">
+            <strong>${escapeHtml(formatDepart(p.depart_at))}</strong>
+            <span>${untilDepart(p.depart_at)}</span>
+          </div>
+          <div class="party-route">
+            <span class="place">${escapeHtml(p.meet_place)}</span>
+            <span class="arrow">→</span>
+            <span class="place dest">${escapeHtml(p.destination)}</span>
+          </div>
+          <div class="party-host">방장 ${escapeHtml(p.host.department)} ${escapeHtml(p.host.name)}
+            ${p.is_host ? '<span class="chip">내 파티</span>' : p.joined ? '<span class="chip">참여 중</span>' : ''}</div>
+          <div class="party-side">${seatBadge(p)} ${action}</div>
+        </li>`;
     }
 
-    async function loadNotices() {
+    async function loadParties() {
+      const params = new URLSearchParams();
+      if (destinationInput.value.trim()) params.set('destination', destinationInput.value.trim());
+      if (dateInput.value) params.set('date', dateInput.value);
       try {
-        const query = category ? `?category=${category}` : '';
-        const { notices } = await api(`/api/notices${query}`);
-        if (notices.length === 0) {
-          list.innerHTML = '<li class="empty">등록된 글이 없습니다.</li>';
-          return;
-        }
-        list.innerHTML = notices.map(n => `
-          <li>
-            <a href="notice.html?id=${n.id}" class="${n.category}">
-              <span class="notice-title">${categoryChip(n.category)} ${escapeHtml(n.title)}</span>
-              <span class="notice-meta">${escapeHtml(n.created_at)}</span>
-              ${seatBadge(n.remaining, n.capacity)}
-            </a>
-          </li>`).join('');
-        message.className = 'message';
+        const { parties } = await api(`/api/parties?${params}`);
+        list.innerHTML = parties.length
+          ? parties.map(partyItem).join('')
+          : '<li class="empty">조건에 맞는 파티가 없습니다. 직접 만들어 보세요!</li>';
       } catch (e) {
-        showMessage(message, e.message, 'fail');
+        if (e.status !== 401) showMessage(message, e.message, 'fail');
       }
     }
 
-    tabs.forEach(tab => tab.addEventListener('click', () => {
-      category = tab.dataset.category;
-      history.replaceState(null, '', category ? `?category=${category}` : 'index.html');
-      renderTabs();
-      loadNotices();
-    }));
-    document.getElementById('refresh').addEventListener('click', loadNotices);
+    // 입장 버튼
+    list.addEventListener('click', async (event) => {
+      const button = event.target.closest('button.join');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await api(`/api/parties/${button.dataset.id}/members`, { method: 'POST' });
+        location.href = `party.html?id=${button.dataset.id}`;
+      } catch (e) {
+        showMessage(message, e.message, 'fail');
+        loadParties();
+      }
+    });
 
-    renderTabs();
-    loadNotices();
+    document.getElementById('search-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      loadParties();
+    });
+    document.getElementById('reset').addEventListener('click', () => {
+      destinationInput.value = '';
+      dateInput.value = '';
+      loadParties();
+    });
+
+    // ── 실시간: 다른 사람이 파티를 만들거나 입장하면 목록을 새로 불러옴 ──
+    // (알림에는 "내가 참여 중인지" 같은 사용자별 정보가 없어서, 알림은 신호로만 쓰고 목록은 REST로 다시 받음)
+    let reloadTimer = null;
+    function scheduleReload() {
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(loadParties, 200);   // 알림이 몰려도 한 번만 새로고침
+    }
+
+    function setLive(ok, text) {
+      document.getElementById('live').classList.toggle('on', ok);
+      document.getElementById('live-text').textContent = text;
+    }
+
+    function connectLobby() {
+      const ws = new WebSocket(wsUrl('/api/ws/lobby'));
+      ws.onopen = () => { setLive(true, '실시간 반영 중'); loadParties(); };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'party_update' || data.type === 'party_removed') scheduleReload();
+      };
+      ws.onclose = () => {
+        setLive(false, '연결 끊김 · 다시 연결 중…');
+        setTimeout(connectLobby, 3000);
+      };
+    }
+
+    requireLogin().then(() => {
+      loadParties();
+      connectLobby();
+      setInterval(loadParties, 60000);   // 출발 시간이 지난 파티 정리, 남은 시간 갱신
+    });
   </script>
 </body>
 </html>
