@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>파티 만들기 · 같이 타요</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <header>
@@ -23,14 +23,19 @@
       <form id="party-form">
         <label>만나는 장소 <input id="meet_place" required maxlength="50" placeholder="예: 정문, 기숙사 앞"></label>
         <label>목적지 <input id="destination" required maxlength="50" placeholder="예: 양주역"></label>
-        <label>출발 시간 <input id="depart_at" type="datetime-local" required></label>
+        <!-- Safari는 datetime-local에서 시간 선택 목록을 안 보여줘서 날짜 + 시/분 드롭다운으로 나눔 -->
+        <label>출발 날짜 <input id="depart_date" type="date" required></label>
+        <div class="time-row">
+          <label>시 <select id="depart_hour" required></select></label>
+          <label>분 <select id="depart_min" required></select></label>
+        </div>
         <button type="submit" class="full" id="submit">파티 만들기</button>
       </form>
       <p id="message" class="message"></p>
     </section>
   </main>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
   <script>
     const partyId = new URLSearchParams(location.search).get('id');   // 있으면 수정 모드
     const message = document.getElementById('message');
@@ -39,13 +44,35 @@
 
     // 수정 모드면 기존 내용을 불러오기 전까지 저장 버튼을 막음 (입력한 값이 덮어써지는 것 방지)
     if (partyId) field('submit').disabled = true;
-    field('depart_at').min = kstInputValue(1);
-    field('depart_at').max = kstInputValue(7 * 24 * 60);
+    const pad = (n) => String(n).padStart(2, '0');
+    for (let h = 0; h < 24; h++) field('depart_hour').add(new Option(`${pad(h)}시`, pad(h)));
+    for (let m = 0; m < 60; m += 5) field('depart_min').add(new Option(`${pad(m)}분`, pad(m)));
+    field('depart_date').min = kstInputValue(0).slice(0, 10);
+    field('depart_date').max = kstInputValue(7 * 24 * 60).slice(0, 10);
+
+    // 'YYYY-MM-DDTHH:MM' ↔ 날짜 칸 + 시/분 드롭다운
+    function getDepart() {
+      return `${field('depart_date').value}T${field('depart_hour').value}:${field('depart_min').value}`;
+    }
+    function setDepart(value) {
+      const [date, time] = value.split('T');
+      const [h, m] = time.split(':');
+      field('depart_date').value = date;
+      field('depart_hour').value = h;
+      // 5분 단위가 아닌 기존 시간(예: 18:07)은 목록에 추가해서 그대로 보여줌
+      if (![...field('depart_min').options].some((o) => o.value === m)) {
+        field('depart_min').add(new Option(`${m}분`, m));
+      }
+      field('depart_min').value = m;
+    }
 
     async function init() {
       await requireLogin();
       if (!partyId) {
-        field('depart_at').value = kstInputValue(30);   // 기본값: 30분 뒤
+        // 기본값: 30분 뒤를 5분 단위로 올림
+        const d = new Date(Date.now() + 9 * 3600000 + 30 * 60000);
+        d.setUTCMinutes(Math.ceil(d.getUTCMinutes() / 5) * 5, 0, 0);
+        setDepart(d.toISOString().slice(0, 16));
         return;
       }
       document.title = '파티 수정 · 같이 타요';
@@ -60,7 +87,7 @@
         original = party;
         field('meet_place').value = party.meet_place;
         field('destination').value = party.destination;
-        field('depart_at').value = party.depart_at.replace(' ', 'T');
+        setDepart(party.depart_at.replace(' ', 'T'));
         field('submit').disabled = false;
       } catch (e) {
         showMessage(message, e.message, 'fail');
@@ -73,7 +100,7 @@
       const body = {
         meet_place: field('meet_place').value.trim(),
         destination: field('destination').value.trim(),
-        depart_at: field('depart_at').value,
+        depart_at: getDepart(),
       };
       try {
         if (partyId) {

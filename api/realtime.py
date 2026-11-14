@@ -22,6 +22,7 @@ class Conn:
     def __init__(self, ws, user_id):
         self.ws = ws
         self.user_id = user_id
+        self.ready = True   # 채팅방 연결은 참여자 확인 전까지 False (방 알림을 받지 않음)
         self.lock = threading.Lock()
 
     def send(self, event):
@@ -44,9 +45,9 @@ room_conns = {}         # party_id → 채팅방 연결들(set)
 
 
 def broadcast_room(party_id, event):
-    """채팅방에 접속 중인 사람들에게 event(dict) 전송"""
+    """채팅방에 접속 중인 사람들에게 event(dict) 전송 (참여자 확인된 연결만: 학번이 담길 수 있음)"""
     with registry_lock:
-        conns = list(room_conns.get(party_id, ()))
+        conns = [c for c in room_conns.get(party_id, ()) if c.ready]
     for conn in conns:
         conn.send(event)
 
@@ -122,6 +123,7 @@ def ws_party(ws, party_id):
         return ws_reject(ws, '로그인이 필요합니다.')
 
     conn = Conn(ws, user['id'])
+    conn.ready = False
     # 먼저 등록하고 나서 참여 여부를 확인해야, 그 사이에 강퇴돼도 알림을 놓치지 않음
     with registry_lock:
         room_conns.setdefault(party_id, set()).add(conn)
@@ -129,6 +131,7 @@ def ws_party(ws, party_id):
         with closing(connect()) as db:
             if not is_member(db, party_id, user['id']):
                 return ws_reject(ws, '파티 참여자만 입장할 수 있습니다.')
+        conn.ready = True
 
         while True:
             raw = ws.receive()

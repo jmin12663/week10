@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>택시 파티 · 같이 타요</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <header>
@@ -22,6 +22,12 @@
     </div>
     <p class="live" id="live"><span class="dot"></span><span id="live-text">연결 중…</span></p>
 
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab active" data-view="open">모집 중</button>
+      <button type="button" class="tab" data-view="joined">참여 중</button>
+      <button type="button" class="tab" data-view="past">지난 파티</button>
+    </div>
+
     <form id="search-form" class="search">
       <input id="destination" placeholder="목적지 검색 (예: 양주역)" maxlength="50">
       <input id="date" type="date">
@@ -33,12 +39,26 @@
     <ul id="party-list" class="party-list"></ul>
   </main>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
   <script>
     const list = document.getElementById('party-list');
     const message = document.getElementById('message');
     const destinationInput = document.getElementById('destination');
     const dateInput = document.getElementById('date');
+    let view = 'open';   // 탭: open(모집 중) / joined(참여 중) / past(지난 파티)
+    const EMPTY = {
+      open: '조건에 맞는 파티가 없습니다. 직접 만들어 보세요!',
+      joined: '참여 중인 파티가 없습니다.',
+      past: '참여했던 지난 파티가 없습니다.',
+    };
+
+    document.getElementById('tabs').addEventListener('click', (event) => {
+      const tab = event.target.closest('.tab');
+      if (!tab) return;
+      view = tab.dataset.view;
+      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
+      loadParties();
+    });
 
     function partyItem(p) {
       let action;
@@ -70,11 +90,12 @@
       const params = new URLSearchParams();
       if (destinationInput.value.trim()) params.set('destination', destinationInput.value.trim());
       if (dateInput.value) params.set('date', dateInput.value);
+      if (view !== 'open') params.set(view, '1');
       try {
         const { parties } = await api(`/api/parties?${params}`);
         list.innerHTML = parties.length
           ? parties.map(partyItem).join('')
-          : '<li class="empty">조건에 맞는 파티가 없습니다. 직접 만들어 보세요!</li>';
+          : `<li class="empty">${EMPTY[view]}</li>`;
       } catch (e) {
         if (e.status !== 401) showMessage(message, e.message, 'fail');
       }

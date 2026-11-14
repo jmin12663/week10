@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>채팅방 · 같이 타요</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <header>
@@ -49,7 +49,7 @@
     </div>
   </main>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
   <script>
     const partyId = Number(new URLSearchParams(location.search).get('id'));
     const message = document.getElementById('message');
@@ -74,17 +74,18 @@
       $('actions').innerHTML = amHost
         ? `<a href="party-form.html?id=${partyId}" class="button secondary small">모집글 수정</a>
            <button class="danger small" id="delete">모집글 삭제</button>`
-        : `<button class="secondary small" id="leave">파티 나가기</button>`;
+        : party.is_expired ? '' : `<button class="secondary small" id="leave">파티 나가기</button>`;
     }
 
     function renderMembers(members) {
       const amHost = party.host.id === me.id;
       $('members').innerHTML = members.map(m => `
         <li>
-          <span class="member-name">${escapeHtml(m.department)} ${escapeHtml(m.name)}</span>
+          <span class="member-name">${escapeHtml(m.department)} ${escapeHtml(m.name)}
+            <span class="member-sid">${escapeHtml(m.student_id)}</span></span>
           ${m.is_host ? '<span class="chip host">방장</span>' : ''}
           ${m.id === me.id ? '<span class="chip">나</span>' : ''}
-          ${amHost && !m.is_host ? `<button class="danger tiny kick" data-id="${m.id}">강퇴</button>` : ''}
+          ${amHost && !m.is_host && !party.is_expired ? `<button class="danger tiny kick" data-id="${m.id}">강퇴</button>` : ''}
         </li>`).join('')
         + Array(Math.max(0, party.capacity - members.length)).fill('<li class="empty-seat">빈 자리</li>').join('');
     }

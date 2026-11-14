@@ -77,10 +77,13 @@ def fetch_party(db, party_id, me_id):
 
 
 def fetch_members(db, party_id, host_id):
-    rows = db.execute('''SELECT u.id, u.name, u.department, m.joined_at
+    """참여자 목록. 학번은 같은 파티 참여자에게만 보여줌 (정산 안 된 사람 확인용)
+    → 파티 상세(참여자만)와 채팅방 알림(참여 확인된 연결만)으로만 나감."""
+    rows = db.execute('''SELECT u.id, u.name, u.department, u.student_id, m.joined_at
                          FROM party_member m JOIN users u ON u.id = m.user_id
                          WHERE m.party_id = ? ORDER BY m.id''', (party_id,)).fetchall()
-    return [{**public_user(r), 'is_host': r['id'] == host_id, 'joined_at': r['joined_at']} for r in rows]
+    return [{**public_user(r), 'student_id': r['student_id'], 'is_host': r['id'] == host_id,
+             'joined_at': r['joined_at']} for r in rows]
 
 
 def add_system_message(db, party_id, content):
@@ -118,7 +121,12 @@ def notify_change(party_id, system_msg=None):
 @login_required
 def list_parties():
     me_id = g.user['id']
-    sql = PARTY_SELECT + ' WHERE p.depart_at >= :now'
+    # ?joined=1: 내가 참여 중인 파티만 / ?past=1: 참여했던 파티 중 출발 시간이 지난 것 (지난 파티 기록)
+    past = request.args.get('past') == '1'
+    joined_only = request.args.get('joined') == '1'
+    sql = PARTY_SELECT + (' WHERE p.depart_at < :now' if past else ' WHERE p.depart_at >= :now')
+    if past or joined_only:
+        sql += ' AND EXISTS (SELECT 1 FROM party_member m WHERE m.party_id = p.id AND m.user_id = :me)'
     params = {'me': me_id, 'now': now_minute()}
 
     destination = request.args.get('destination', '').strip()
@@ -137,7 +145,12 @@ def list_parties():
         sql += ' AND p.depart_at LIKE :date'
         params['date'] = f'{date}%'
 
-    sql += ' ORDER BY p.depart_at, p.id'
+    if past:
+        # ponytail: 최근 50개만. 더 보기가 필요해지면 before 커서로 페이지 나누기
+        sql += ' ORDER BY p.depart_at DESC, p.id DESC LIMIT 50'
+    else:
+        # 내 파티 → 참여 중 → 나머지, 각 묶음 안에서는 출발 시간순
+        sql += ' ORDER BY p.host_user_id = :me DESC, joined DESC, p.depart_at, p.id'
     with closing(connect()) as db:
         rows = db.execute(sql, params).fetchall()
     return jsonify(parties=[party_json(r, me_id) for r in rows])
@@ -314,7 +327,8 @@ def remove_member(party_id, target):
     leaving = target_id == me_id
 
     with closing(connect()) as db, db:
-        party = db.execute('SELECT host_user_id FROM party WHERE id = ?', (party_id,)).fetchone()
+        party = db.execute('SELECT host_user_id, depart_at FROM party WHERE id = ?',
+                           (party_id,)).fetchone()
         if party is None:
             return error('존재하지 않는 파티입니다.', 404)
         is_host = party['host_user_id'] == me_id
@@ -323,6 +337,9 @@ def remove_member(party_id, target):
             return error('방장은 나갈 수 없습니다. 모집글을 삭제하세요.', 409)
         if not leaving and not is_host:
             return error('방장만 강퇴할 수 있습니다.', 403)
+        # 출발 후에는 참여자 기록을 그대로 남김 (지난 파티 기록에서 빠지지 않게)
+        if party['depart_at'] < now_minute():
+            return error('출발 시간이 지난 파티는 나가거나 강퇴할 수 없습니다.', 409)
 
         target_user = db.execute('SELECT * FROM users WHERE id = ?', (target_id,)).fetchone()
         cur = db.execute('DELETE FROM party_member WHERE party_id = ? AND user_id = ?',
