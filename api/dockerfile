@@ -3,6 +3,6 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 COPY requirements.txt .
 RUN pip install -r requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org
-COPY app.py .
+COPY *.py .
 EXPOSE 5000
 CMD ["python", "app.py"]
