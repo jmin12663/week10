@@ -4,13 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>택시 파티 · 같이 타요</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <header>
     <a href="index.html" class="logo">같이 타요</a>
     <nav>
       <span id="who" class="who"></span>
+      <a href="me.html" class="nav-link">내 정보</a>
       <button id="logout" class="nav-link" type="button">로그아웃</button>
     </nav>
   </header>
@@ -31,6 +32,7 @@
     <form id="search-form" class="search">
       <input id="destination" placeholder="목적지 검색 (예: 양주역)" maxlength="50">
       <input id="date" type="date">
+      <select id="hour"><option value="">시간 전체</option></select>
       <button type="submit" class="secondary">검색</button>
       <button type="button" id="reset" class="secondary">초기화</button>
     </form>
@@ -45,6 +47,11 @@
     const message = document.getElementById('message');
     const destinationInput = document.getElementById('destination');
     const dateInput = document.getElementById('date');
+    const hourSelect = document.getElementById('hour');
+    for (let h = 0; h < 24; h++) {
+      hourSelect.add(new Option(`${String(h).padStart(2, '0')}시 이후`, h));
+    }
+    hourSelect.addEventListener('change', () => loadParties());
     let view = 'open';   // 탭: open(모집 중) / joined(참여 중) / past(지난 파티)
     const EMPTY = {
       open: '조건에 맞는 파티가 없습니다. 직접 만들어 보세요!',
@@ -90,6 +97,7 @@
       const params = new URLSearchParams();
       if (destinationInput.value.trim()) params.set('destination', destinationInput.value.trim());
       if (dateInput.value) params.set('date', dateInput.value);
+      if (hourSelect.value) params.set('hour', hourSelect.value);
       if (view !== 'open') params.set(view, '1');
       try {
         const { parties } = await api(`/api/parties?${params}`);
@@ -122,6 +130,7 @@
     document.getElementById('reset').addEventListener('click', () => {
       destinationInput.value = '';
       dateInput.value = '';
+      hourSelect.value = '';
       loadParties();
     });
 

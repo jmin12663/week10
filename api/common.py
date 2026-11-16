@@ -22,8 +22,13 @@ def text_field(data, key, max_len):
     return value.strip()
 
 
+DELETED_NAME = '탈퇴한 사용자'   # 탈퇴하면 이름을 이걸로 바꿈 (지난 파티 기록은 남김)
+
+
 def mask_name(name):
     """다른 사용자에게 보여줄 이름: 신정민 → 신*민, 정민 → 정*"""
+    if name == DELETED_NAME:
+        return name
     if len(name) <= 2:
         return name[0] + '*'
     return name[0] + '*' * (len(name) - 2) + name[-1]

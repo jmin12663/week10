@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>내 정보 · 같이 타요</title>
+  <link rel="stylesheet" href="style.css?v=6">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">같이 타요</a>
+    <nav>
+      <span id="who" class="who"></span>
+      <button id="logout" class="nav-link" type="button">로그아웃</button>
+    </nav>
+  </header>
+
+  <main class="narrow">
+    <a href="index.html" class="back">← 목록으로</a>
+
+    <section class="card">
+      <h1>내 정보</h1>
+      <p class="hint">이름과 학번은 정산 확인에 쓰여서 바꿀 수 없어요. 잘못 가입했다면 탈퇴 후 다시 가입하세요.</p>
+      <dl class="info">
+        <dt>아이디</dt><dd id="info-username"></dd>
+        <dt>이름</dt><dd id="info-name"></dd>
+        <dt>학번</dt><dd id="info-student"></dd>
+      </dl>
+      <form id="dept-form">
+        <label>학과 <input id="department" required maxlength="30"></label>
+        <button type="submit" class="full">학과 저장</button>
+      </form>
+      <p id="dept-message" class="message"></p>
+    </section>
+
+    <section class="card">
+      <h2>비밀번호 변경</h2>
+      <form id="pw-form">
+        <label>현재 비밀번호 <input id="current_password" type="password" autocomplete="current-password" required></label>
+        <label>새 비밀번호 <input id="new_password" type="password" autocomplete="new-password" required
+               minlength="8" maxlength="64" placeholder="8자 이상"></label>
+        <label>새 비밀번호 확인 <input id="new_password2" type="password" autocomplete="new-password" required></label>
+        <button type="submit" class="full">비밀번호 변경</button>
+      </form>
+      <p id="pw-message" class="message"></p>
+    </section>
+
+    <section class="card">
+      <h2>회원 탈퇴</h2>
+      <p class="hint">출발 전인 파티가 있으면 먼저 나가거나 모집글을 삭제해야 해요.
+        탈퇴하면 개인정보는 지워지고, 지난 파티 기록에는 "탈퇴한 사용자"로 남습니다.</p>
+      <form id="delete-form">
+        <label>비밀번호 확인 <input id="delete_password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="danger full">탈퇴하기</button>
+      </form>
+      <p id="delete-message" class="message"></p>
+    </section>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function render(me) {
+      $('info-username').textContent = me.username;
+      $('info-name').textContent = me.name;
+      $('info-student').textContent = me.student_id;
+      $('department').value = me.department;
+      $('who').textContent = `${me.department} ${me.name}`;
+    }
+
+    $('dept-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const me = await api('/api/users/me', {
+          method: 'PATCH', body: JSON.stringify({ department: $('department').value.trim() }),
+        });
+        render(me);
+        showMessage($('dept-message'), '학과를 저장했습니다.', 'ok');
+      } catch (e) {
+        showMessage($('dept-message'), e.message, 'fail');
+      }
+    });
+
+    $('pw-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if ($('new_password').value !== $('new_password2').value) {
+        showMessage($('pw-message'), '새 비밀번호 확인이 일치하지 않습니다.', 'fail');
+        return;
+      }
+      try {
+        await api('/api/users/me/password', {
+          method: 'PUT',
+          body: JSON.stringify({
+            current_password: $('current_password').value,
+            new_password: $('new_password').value,
+          }),
+        });
+        $('pw-form').reset();
+        showMessage($('pw-message'), '비밀번호를 변경했습니다.', 'ok');
+      } catch (e) {
+        showMessage($('pw-message'), e.message, 'fail');
+      }
+    });
+
+    $('delete-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!confirm('정말 탈퇴할까요? 되돌릴 수 없습니다.')) return;
+      try {
+        await api('/api/users/me', {
+          method: 'DELETE', body: JSON.stringify({ password: $('delete_password').value }),
+        });
+        location.href = 'login.html';
+      } catch (e) {
+        showMessage($('delete-message'), e.message, 'fail');
+      }
+    });
+
+    requireLogin().then(render);
+  </script>
+</body>
+</html>

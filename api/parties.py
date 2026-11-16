@@ -82,7 +82,9 @@ def fetch_members(db, party_id, host_id):
     rows = db.execute('''SELECT u.id, u.name, u.department, u.student_id, m.joined_at
                          FROM party_member m JOIN users u ON u.id = m.user_id
                          WHERE m.party_id = ? ORDER BY m.id''', (party_id,)).fetchall()
-    return [{**public_user(r), 'student_id': r['student_id'], 'is_host': r['id'] == host_id,
+    # 탈퇴한 사용자의 학번 자리에는 'deleted-<id>'가 들어 있어서 숨김
+    return [{**public_user(r), 'is_host': r['id'] == host_id,
+             'student_id': '' if r['student_id'].startswith('deleted-') else r['student_id'],
              'joined_at': r['joined_at']} for r in rows]
 
 
@@ -144,6 +146,14 @@ def list_parties():
             return error('날짜 형식이 올바르지 않습니다. (예: 2026-11-20)', 400)
         sql += ' AND p.depart_at LIKE :date'
         params['date'] = f'{date}%'
+
+    # ?hour=18: 18시 이후 출발 (날짜와 함께 쓰면 그날 18시 이후). depart_at의 12번째 글자부터가 'HH:MM'
+    hour = request.args.get('hour', '').strip()
+    if hour:
+        if not hour.isdigit() or not 0 <= int(hour) <= 23:
+            return error('시간은 0~23 사이로 입력하세요.', 400)
+        sql += ' AND substr(p.depart_at, 12) >= :time'
+        params['time'] = f'{int(hour):02d}:00'
 
     if past:
         # ponytail: 최근 50개만. 더 보기가 필요해지면 before 커서로 페이지 나누기

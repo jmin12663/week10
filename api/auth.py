@@ -6,7 +6,8 @@ import secrets
 import sqlite3
 
 from database import connect, now_kst
-from common import error, text_field, login_required
+from common import error, read_json, text_field, login_required, DELETED_NAME
+from parties import now_minute
 
 bp = Blueprint('auth', __name__)
 
@@ -97,6 +98,72 @@ def logout():
 @bp.get('/api/users/me')
 @login_required
 def me():
-    u = g.user
-    return jsonify(id=u['id'], username=u['username'], student_id=u['student_id'],
-                   department=u['department'], name=u['name'])
+    return jsonify(me_json(g.user))
+
+
+def me_json(u):
+    return {'id': u['id'], 'username': u['username'], 'student_id': u['student_id'],
+            'department': u['department'], 'name': u['name']}
+
+
+# 내 정보 수정: 학과만 바꿀 수 있음.
+# 이름·학번은 정산 안 한 사람을 확인하는 근거라 바꾸지 못하게 함 (잘못 가입했으면 탈퇴 후 재가입)
+@bp.patch('/api/users/me')
+@login_required
+def update_me():
+    data = read_json()
+    if data is None:
+        return error('JSON 형식으로 보내주세요.', 400)
+    department = text_field(data, 'department', 30)
+    if department is None:
+        return error('학과를 30자 이내로 입력하세요.', 400)
+    with closing(connect()) as db, db:
+        db.execute('UPDATE users SET department = ? WHERE id = ?', (department, g.user['id']))
+        user = db.execute('SELECT * FROM users WHERE id = ?', (g.user['id'],)).fetchone()
+    return jsonify(me_json(user))
+
+
+# 비밀번호 변경: 현재 비밀번호를 한 번 더 확인
+@bp.put('/api/users/me/password')
+@login_required
+def change_password():
+    data = read_json()
+    if data is None:
+        return error('JSON 형식으로 보내주세요.', 400)
+    current = data.get('current_password')
+    new = data.get('new_password')
+    if not isinstance(current, str) or not check_password_hash(g.user['password_hash'], current):
+        return error('현재 비밀번호가 올바르지 않습니다.', 403)
+    if not isinstance(new, str) or not 8 <= len(new) <= 64:
+        return error('새 비밀번호는 8~64자로 입력하세요.', 400)
+    with closing(connect()) as db, db:
+        db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                   (generate_password_hash(new), g.user['id']))
+    return '', 204
+
+
+# 회원 탈퇴: 계정 행은 지우지 않고 개인정보만 지움.
+# 지난 파티의 참여자 기록·채팅이 다른 사람에게 그대로 남아야 하고, 외래키도 깨지지 않게 하기 위함.
+@bp.delete('/api/users/me')
+@login_required
+def delete_me():
+    data = read_json()
+    password = data.get('password') if data else None
+    if not isinstance(password, str) or not check_password_hash(g.user['password_hash'], password):
+        return error('비밀번호가 올바르지 않습니다.', 403)
+
+    me_id = g.user['id']
+    with closing(connect()) as db, db:
+        # 출발 전인 파티에 남아 있으면 인원 표시가 틀어지므로 먼저 나가거나 삭제하게 함
+        active = db.execute('''SELECT 1 FROM party_member m JOIN party p ON p.id = m.party_id
+                               WHERE m.user_id = ? AND p.depart_at >= ?''',
+                            (me_id, now_minute())).fetchone()
+        if active:
+            return error('출발 전인 파티가 있습니다. 파티에서 나가거나 모집글을 삭제한 뒤 탈퇴하세요.', 409)
+        # 아이디·학번 자리는 UNIQUE라 'deleted-<id>'로 비워서 같은 아이디·학번으로 재가입 가능하게 함.
+        # 비밀번호 해시를 '!'로 바꾸면 어떤 비밀번호로도 로그인되지 않음.
+        db.execute('''UPDATE users SET username = ?, student_id = ?, name = ?, department = '',
+                      password_hash = '!' WHERE id = ?''',
+                   (f'deleted-{me_id}', f'deleted-{me_id}', DELETED_NAME, me_id))
+    session.clear()
+    return '', 204
