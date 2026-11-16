@@ -9,7 +9,7 @@ from realtime import broadcast_room, broadcast_lobby, close_room, close_room_mem
 
 bp = Blueprint('parties', __name__)
 
-# ---------- 파티 공통 함수 ----------
+# ---------- 공통 함수
 MAX_DAYS_AHEAD = 7    # 출발 시간은 지금부터 7일 이내만 허용 (장난성 글 방지)
 
 
