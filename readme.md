@@ -54,9 +54,7 @@ week10-repo/
 │       ├── party-form.html  # 파티 만들기 / 수정 (?id= 있으면 수정)
 │       ├── party.html    # 채팅방 (참여자 목록, 채팅, 방장 메뉴)
 │       └── me.html       # 내 정보 (학과 수정, 비밀번호 변경, 탈퇴)
-└── tests/
-    ├── test_api.py       # REST API 시험 (동시 입장 포함)
-    └── test_ws.py        # WebSocket 실시간 시험
+
 ```
 
 **DB 테이블**
